@@ -1,0 +1,226 @@
+<html>
+    <head>
+        <script src="http://d3js.org/d3.v4.min.js" charset="utf-8"></script>   
+        <title>D3練習</title>
+        <meta charset="UTF-8">
+    </head>
+    
+    <body>     
+        <script type="text/javascript">
+
+            var border = 2;
+            var bordercolor = "black"
+
+            var margin = {
+                top: 15,
+                right: 2,
+                bottom: 2,
+                left: 2
+            };
+
+            var width = 1300 - margin.left - margin.right;
+            var height = 800 - margin.top - margin.bottom;
+            var padding = 60;
+            var time_format = d3.timeFormat("%Y/%m/%e");
+
+            var svg = d3.select("body")
+                .append("svg")
+                .attr("class","my_canvas")
+                .attr("width","100%")
+                .attr("height","100%")
+                .attr("viewBox",`0 0 1400 800`)
+                .attr("preserveAspectRatio", "xMidYMid meet")
+                .attr("border",border);
+            
+
+            d3.csv("縣市人口統計.csv", function(data) {
+
+                data.forEach(function(d){
+                    d['人口差'] = parseInt(d['人口差']);
+                });
+
+                var date_range = d3.extent(data, function(d){
+                    return new Date(d.Date);  
+                });
+
+                var people_range = d3.extent(data, function(d){
+                    return d['人口差'];
+                });
+
+                var x_scale = d3.scaleTime()
+                    .domain([date_range[0],date_range[1]])
+                    .range([padding, width - padding*2]);
+
+                var y_scale = d3.scaleLinear()
+                    .domain([people_range[0],people_range[1]])
+                    .range([height - padding,padding]);
+                
+                d3.select("svg").append("g")
+                    .attr("class","new_canvas")
+                    .attr("transform", function(d){ return "translate("+padding+",0)";});
+
+                d3.select("svg").append("g")
+                    .attr("class","x-axis")
+                    .attr("transform", function(d){ return "translate("+padding+","+(height-padding)+")";})
+                    .call(d3.axisBottom(x_scale));
+                
+                d3.select("svg").append("g")
+                    .attr("class","y-axis")
+                    .attr("transform", function(d){ return "translate("+padding*2+",0)"})
+                    .call(d3.axisLeft(y_scale));
+
+                var sumstat = d3.nest()
+                    .key(function(d){ return d['縣市'];})
+                    .entries(data);
+
+                var res = sumstat.map(function(d){ return d.key; });
+
+                var cls="";
+                var Lcls="";
+                for (var i=0;i<res.length;i++){
+                    if(i==res.length-1){
+                        cls = cls+"."+res[i];
+                        Lcls = Lcls+"."+"L"+res[i];
+                    }
+                    else{
+                        cls = cls+"."+res[i]+",";
+                        Lcls = Lcls+"."+"L"+res[i]+",";  
+                    }
+                }
+                
+
+                var color = d3.scaleOrdinal()
+                    .domain(res)
+                    .range(d3.schemeCategory20);
+
+                var legend = svg.selectAll(".legend")
+                    .data(color.domain())
+                    .enter().append("g")
+                    .attr("class", function(d){
+                        return "L"+d;
+                    })
+                    .attr("transform",function(d, i) { return "translate(0," + i * 20 + ")"; })
+                    .on("mouseover", function(d){
+                            d3.selectAll(cls).style("opacity",0.3).style("stroke-width",1.5);
+                            d3.select("."+d).style("opacity",1).style("stroke-width",5);
+                            d3.selectAll(Lcls).style("opacity",0.3);
+                            d3.select("."+"L"+d).style("opacity",1);
+
+                    })
+                    .on("mouseout", function(d){
+                        d3.selectAll(cls).style("opacity",1).style("stroke-width",1.5);
+                        d3.selectAll(Lcls).style("opacity",1);
+                    });
+                
+                legend.append("rect")
+                    .attr("x",width+56)
+                    .attr("width",18)
+                    .attr("height",18)
+                    .style("fill",color);
+                
+                legend.append("text")
+                    .attr("x",width+50)
+                    .attr("y",9)
+                    .attr("dy",".35em")
+                    .style("text-anchor","end")
+                    .text(function(d){return d;});
+
+                var borderPath = svg.append("rect")
+                    .attr("x",0)
+                    .attr("y",0)
+                    .attr("height",height)
+                    .attr("width",width)
+                    .style("stroke",bordercolor)
+                    .style("fill","none")
+                    .style("stroke-width", border);
+
+                svg.append("text")
+                    .attr("x",padding)
+                    .attr("y",height/2)
+                    .attr("text-anchor","middle")
+                    .style("font-size","16px")
+                    .style("writing-mode","tb")
+                    .text("人口差");
+
+                svg.append("text")
+                    .attr("x",width/2)
+                    .attr("y",height-10)
+                    .attr("text-anchor","middle")
+                    .style("font-size","16px")
+                    .text("年份");
+
+                var tooltip = d3.select("body")
+                    .append("div")
+                        .attr("width","60px")
+                        .attr("height","28px")
+                        .attr("padding","4px")
+                        .style("background","white")
+                        .style("position","absolute")
+                        .style("border","2px")
+                        .style("border-style","solid")
+                        .style("border-color","red")
+                        .style("border-radius","8px")
+                        .style("visibility","hidden");
+
+                path = d3.select(".new_canvas").selectAll(".path").data(sumstat)
+                .enter().append("path")
+                    .attr("class",function(d){
+                        return d.key;
+                    })
+                    .attr("d",function(d){  
+                        return d3.line()
+                            .x(function(d){ return x_scale(new Date(d.Date));})
+                            .y(function(d){ return y_scale(d['人口差']);})
+                            (d.values)
+                    })
+                    .attr("stroke-width",1.5)
+                    .attr("fill","none")
+                    .attr("stroke", function(d){ return color(d.key);})
+                    .style("opacity",1)
+                    .on("mouseover", function(d){
+                        var mouse = d3.mouse(this);
+                        var x = mouse[0] + 70;
+                        var y = mouse[1] - 70;
+
+                        var currenX = x_scale.invert(mouse[0]);
+                        var currenY = parseInt(y_scale.invert(mouse[1]));
+
+                        tooltip.style("visibility","visible")
+                                .style("white-space","pre-line")
+                                .text(time_format(currenX)+d.key+"\n"+"人口差:"+currenY);
+                        /*var xDate = x_scale.invert(mouse[0]);
+                        var bisect = d3.bisector(function (d) { return new Date(d.Date); }).left;
+                        var idx = bisect(d.values, xDate);
+                        tooltip.style("visibility","visible")
+                                .style("white-space","pre-line")
+                                .text(d.values[idx].Date+"\n"+d.key+"\n人口差: "+d.values[idx]['人口差']);*/
+                        d3.selectAll(cls).style("opacity",0.3).style("stroke-width",1.5);
+                        d3.select("."+d.key).style("opacity",1).style("stroke-width",5);
+                        d3.selectAll(Lcls).style("opacity",0.3);
+                        d3.select("."+"L"+d.key).style("opacity",1);
+                        })             
+                    .on("mousemove", function(d){
+                        tooltip.style("top", (event.pageY-10)+"px").style("left",(event.pageX+10)+"px");
+
+                    })
+                    .on("mouseout", function(d){
+                        tooltip.style("visibility","hidden");
+                        d3.selectAll(cls).style("opacity",1).style("stroke-width",1.5);
+                        d3.selectAll(Lcls).style("opacity",1);
+                        });
+
+                path
+                    .each(function(d){ d.totalLength = this.getTotalLength();})
+                    .attr("stroke-dasharray", function(d) { return d.totalLength + " " + d.totalLength; })
+                    .attr("stroke-dashoffset", function(d) { return d.totalLength; })
+                    .transition()
+                    .duration(10000)
+                    .ease(d3.easeLinear)
+                    .attr("stroke-dashoffset", 0);
+
+
+
+            });
+        </script>
+    </body>
+</html>
